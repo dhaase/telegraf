@@ -56,6 +56,8 @@ be deprecated eventually.
 - [#2339](https://github.com/influxdata/telegraf/pull/2339): Increment gather_errors for all errors emitted by inputs.
 - [#2071](https://github.com/influxdata/telegraf/issues/2071): Use official docker SDK.
 - [#1678](https://github.com/influxdata/telegraf/pull/1678): Add AMQP consumer input plugin
+- [#2501](https://github.com/influxdata/telegraf/pull/2501): Support DEAD(X) state in system input plugin.
+- [#2522](https://github.com/influxdata/telegraf/pull/2522): Add support for mongodb client certificates.
 
 ### Bugfixes
 
@@ -74,6 +76,12 @@ be deprecated eventually.
 - [#2178](https://github.com/influxdata/telegraf/issues/2178): logparser: regexp with lookahead.
 - [#2466](https://github.com/influxdata/telegraf/issues/2466): Telegraf can crash in LoadDirectory on 0600 files.
 - [#2215](https://github.com/influxdata/telegraf/issues/2215): Iptables input: document better that rules without a comment are ignored.
+- [#2483](https://github.com/influxdata/telegraf/pull/2483): Fix win_perf_counters capping values at 100.
+- [#2498](https://github.com/influxdata/telegraf/pull/2498): Exporting Ipmi.Path to be set by config.
+- [#2500](https://github.com/influxdata/telegraf/pull/2500): Remove warning if parse empty content
+- [#2520](https://github.com/influxdata/telegraf/pull/2520): Update default value for Cloudwatch rate limit
+- [#2513](https://github.com/influxdata/telegraf/issues/2513): create /etc/telegraf/telegraf.d directory in tarball.
+- [#2541](https://github.com/influxdata/telegraf/issues/2541): Return error on unsupported serializer data format.
 
 ## v1.2.1 [2017-02-01]
 
