@@ -2,10 +2,14 @@ package postgresql_extensible
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"log"
 	"regexp"
 	"strings"
+
+	// register in driver.
+	_ "github.com/jackc/pgx/stdlib"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
@@ -112,23 +116,24 @@ func (p *Postgresql) IgnoredColumns() map[string]bool {
 var localhost = "host=localhost sslmode=disable"
 
 func (p *Postgresql) Gather(acc telegraf.Accumulator) error {
-
-	var sql_query string
-	var query_addon string
-	var db_version int
-	var query string
-	var tag_value string
-	var meas_name string
+	var (
+		err         error
+		db          *sql.DB
+		sql_query   string
+		query_addon string
+		db_version  int
+		query       string
+		tag_value   string
+		meas_name   string
+	)
 
 	if p.Address == "" || p.Address == "localhost" {
 		p.Address = localhost
 	}
 
-	db, err := postgresql.Connect(p.Address)
-	if err != nil {
+	if db, err = sql.Open("pgx", p.Address); err != nil {
 		return err
 	}
-
 	defer db.Close()
 
 	// Retreiving the database version
@@ -136,7 +141,7 @@ func (p *Postgresql) Gather(acc telegraf.Accumulator) error {
 	query = `select substring(setting from 1 for 3) as version from pg_settings where name='server_version_num'`
 	err = db.QueryRow(query).Scan(&db_version)
 	if err != nil {
-		return err
+		db_version = 0
 	}
 	// We loop in order to process each query
 	// Query is not run if Database version does not match the query version.
@@ -165,7 +170,8 @@ func (p *Postgresql) Gather(acc telegraf.Accumulator) error {
 		if p.Query[i].Version <= db_version {
 			rows, err := db.Query(sql_query)
 			if err != nil {
-				return err
+				acc.AddError(err)
+				continue
 			}
 
 			defer rows.Close()
@@ -173,7 +179,8 @@ func (p *Postgresql) Gather(acc telegraf.Accumulator) error {
 			// grab the column information from the result
 			p.OrderedColumns, err = rows.Columns()
 			if err != nil {
-				return err
+				acc.AddError(err)
+				continue
 			} else {
 				for _, v := range p.OrderedColumns {
 					p.AllColumns = append(p.AllColumns, v)
@@ -190,7 +197,8 @@ func (p *Postgresql) Gather(acc telegraf.Accumulator) error {
 			for rows.Next() {
 				err = p.accRow(meas_name, rows, acc)
 				if err != nil {
-					return err
+					acc.AddError(err)
+					break
 				}
 			}
 		}
@@ -223,8 +231,12 @@ func (p *Postgresql) SanitizedAddress() (_ string, err error) {
 }
 
 func (p *Postgresql) accRow(meas_name string, row scanner, acc telegraf.Accumulator) error {
-	var columnVars []interface{}
-	var dbname bytes.Buffer
+	var (
+		err        error
+		columnVars []interface{}
+		dbname     bytes.Buffer
+		tagAddress string
+	)
 
 	// this is where we'll store the column name with its *interface{}
 	columnMap := make(map[string]*interface{})
@@ -239,11 +251,10 @@ func (p *Postgresql) accRow(meas_name string, row scanner, acc telegraf.Accumula
 	}
 
 	// deconstruct array of variables and send to Scan
-	err := row.Scan(columnVars...)
-
-	if err != nil {
+	if err = row.Scan(columnVars...); err != nil {
 		return err
 	}
+
 	if columnMap["datname"] != nil {
 		// extract the database name from the column map
 		dbname.WriteString((*columnMap["datname"]).(string))
@@ -251,17 +262,16 @@ func (p *Postgresql) accRow(meas_name string, row scanner, acc telegraf.Accumula
 		dbname.WriteString("postgres")
 	}
 
-	var tagAddress string
-	tagAddress, err = p.SanitizedAddress()
-	if err != nil {
+	if tagAddress, err = p.SanitizedAddress(); err != nil {
 		return err
 	}
 
 	// Process the additional tags
+	tags := map[string]string{
+		"server": tagAddress,
+		"db":     dbname.String(),
+	}
 
-	tags := map[string]string{}
-	tags["server"] = tagAddress
-	tags["db"] = dbname.String()
 	fields := make(map[string]interface{})
 COLUMN:
 	for col, val := range columnMap {
@@ -287,6 +297,7 @@ COLUMN:
 			}
 			continue COLUMN
 		}
+
 		if v, ok := (*val).([]byte); ok {
 			fields[col] = string(v)
 		} else {

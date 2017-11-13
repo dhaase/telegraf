@@ -64,7 +64,7 @@ func TestGather(t *testing.T) {
 	var acc testutil.Accumulator
 	c.client = &mockGatherCloudWatchClient{}
 
-	c.Gather(&acc)
+	acc.GatherError(c.Gather)
 
 	fields := map[string]interface{}{}
 	fields["latency_minimum"] = 0.1
@@ -207,14 +207,13 @@ func TestGenerateStatisticsInputParams(t *testing.T) {
 }
 
 func TestMetricsCacheTimeout(t *testing.T) {
-	ttl, _ := time.ParseDuration("5ms")
 	cache := &MetricCache{
 		Metrics: []*cloudwatch.Metric{},
 		Fetched: time.Now(),
-		TTL:     ttl,
+		TTL:     time.Minute,
 	}
 
 	assert.True(t, cache.IsValid())
-	time.Sleep(ttl)
+	cache.Fetched = time.Now().Add(-time.Minute)
 	assert.False(t, cache.IsValid())
 }
